@@ -1,0 +1,76 @@
+# ============================================================================
+# WHAT DOES THIS AGENT DO?
+# ============================================================================
+# This workflow acts as an automated quality guardian for your repository,
+# enforcing best practices and maintaining code health across any project type.
+#
+# 🛡️ Gitleaks (Security Guard):
+#    Acts as your bodyguard. If anyone (you or a collaborator) accidentally
+#    commits a file containing real passwords, API tokens, or sensitive credentials,
+#    this agent stops the process and alerts you before it becomes a security incident.
+#
+# 🔧 Super-Linter Slim (Swiss Army Knife):
+#    Your universal code quality tool. Regardless of whether your repo contains
+#    Python, Node.js, or just documentation, this linter will check for formatting
+#    errors in configuration files (.yaml, .json), bash scripts, Dockerfiles, and more.
+#
+# 📋 Structure Check (Friendly Reminder):
+#    A minimalist script that gently "reminds" you if you're missing essential files
+#    like README.md, LICENSE, or .gitignore. A repository without these files
+#    doesn't follow industry best practices.
+#
+# 📝 Markdown Lint (Documentation Perfectionist):
+#    Because poorly formatted documentation reflects poorly on your project.
+#    This agent ensures your titles, lists, and formatting in README files
+#    look professional and polished.
+# ============================================================================
+
+name: "Agent - Universal Best Practices"
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  quality-audit:
+    name: "Audit Project Health"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: "1. Checkout Code"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Necesario para un escaneo profundo
+
+      - name: "2. Check for Secrets (Security)"
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Evita que subas por error llaves de AWS, passwords o tokens
+
+      - name: "3. Universal Linting (Super-Linter)"
+        uses: github/super-linter/slim@v5
+        env:
+          VALIDATE_ALL_CODEBASE: false # Solo revisa los archivos cambiados
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # El "slim" detecta automáticamente si tienes YAML, JSON, Markdown, 
+          # Dockerfiles, Shell scripts, etc., y los valida bajo estándares pro.
+
+      - name: "4. Verify Documentation & Structure"
+        run: |
+          echo "Checking for essential files..."
+          MISSING_FILES=()
+          [ ! -f "README.md" ] && MISSING_FILES+=("README.md")
+          [ ! -f "LICENSE" ] && MISSING_FILES+=("LICENSE")
+          [ ! -f ".gitignore" ] && MISSING_FILES+=(".gitignore")
+          
+          if [ ${#MISSING_FILES[@]} -gt 0 ]; then
+            echo "::warning title=Missing Best Practice Files::Faltan los siguientes archivos: ${MISSING_FILES[*]}"
+          else
+            echo "All essential files are present. Good job!"
+          fi
+
+

@@ -1,0 +1,6 @@
+# Ignore generated output files in briefs and specs directories
+# Keep the directories themselves via .gitkeep files
+briefs/*
+!briefs/.gitkeep
+specs/*
+!specs/.gitkeep

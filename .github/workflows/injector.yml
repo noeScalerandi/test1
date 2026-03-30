@@ -1,0 +1,37 @@
+name: "Auto-Deploy Agents"
+on:
+  workflow_dispatch:
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    if: github.repository == 'noeScalerandi/sdd-orchestrator'
+    steps:
+      - name: Checkout Master Templates
+        uses: actions/checkout@v4
+
+      - name: Push Agents to New Repo
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_AGENT_TOKEN }}
+        run: |
+          NEW_REPO="${{ github.event.repository.full_name }}"
+          
+          # Clonamos el nuevo repositorio recién creado
+          git clone https://x-access-token:$GH_TOKEN@github.com/$NEW_REPO.git target-repo
+          
+          # Creamos la ruta de workflows en el nuevo repo
+          mkdir -p target-repo/.github/workflows/
+          
+          # Copiamos los agentes desde nuestra carpeta de templates
+          cp templates/*.yml target-repo/.github/workflows/
+          
+          # Eliminamos el archivo injector.yml del nuevo repositorio
+          rm -f target-repo/.github/workflows/injector.yml
+          
+          # Subimos los cambios al nuevo repositorio
+          cd target-repo
+          git config user.name "Central Agent Manager"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "chore: bots/agentes de testing, styling y buenas prácticas agregados"
+          git push

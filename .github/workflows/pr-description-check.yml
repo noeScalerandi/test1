@@ -1,0 +1,92 @@
+# ============================================================================
+# PULL REQUEST DESCRIPTION VALIDATION
+# ============================================================================
+# This workflow checks that all PRs have an adequate description before
+# being merged. A good description is essential for:
+#   - Facilitating code review
+#   - Keeping the project history understandable
+#   - Providing context to AI agents working on the repo
+#
+# Validation criteria:
+#   - Description must not be empty
+#   - Must have at least 10 characters
+#   - Suggested (non-blocking) to include "## What" and "## Why" sections
+# ============================================================================
+
+name: "PR Description Check"
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  check-description:
+    name: "Validate PR description"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Check description"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            const trimmed = body.trim();
+            const MIN_DESCRIPTION_LENGTH = 10;
+
+            // Required validation: minimum description
+            if (trimmed.length < MIN_DESCRIPTION_LENGTH) {
+              const suggestions = `
+            ## ❌ Insufficient PR description
+
+            This PR needs a description before it can be merged.
+
+            ### What to include?
+
+            \`\`\`markdown
+            ## What
+            Brief description of the changes made.
+
+            ## Why
+            Motivation or context for the change (related issue, business need, etc.).
+
+            ## How to test
+            Steps to verify that the changes work correctly.
+            \`\`\`
+
+            > 💡 A good description speeds up reviews and helps AI agents understand the context.
+            `;
+
+              // Comment on the PR with suggestions
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: suggestions,
+              });
+
+              core.setFailed(
+                `PR description is empty or too short (${trimmed.length} characters). ` +
+                `At least ${MIN_DESCRIPTION_LENGTH} characters are required.`
+              );
+              return;
+            }
+
+            // Optional validation: recommended sections (warning only)
+            const hasWhat = /^#{1,3}\s+what/im.test(trimmed);
+            const hasWhy  = /^#{1,3}\s+why/im.test(trimmed);
+
+            if (!hasWhat || !hasWhy) {
+              const missing = [];
+              if (!hasWhat) missing.push('`## What`');
+              if (!hasWhy)  missing.push('`## Why`');
+
+              core.warning(
+                `Consider adding ${missing.join(' and ')} sections to the PR description ` +
+                'to improve traceability and facilitate reviews.'
+              );
+            }
+
+            console.log(`✅ Valid description (${trimmed.length} characters).`);

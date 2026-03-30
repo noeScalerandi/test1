@@ -1,0 +1,79 @@
+name: "Template Cleanup"
+on:
+  push:
+    branches: [main, master]
+  create:
+  workflow_dispatch:
+
+permissions:
+  contents: write  # Required for git push
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    if: github.repository != 'noeScalerandi/sdd-orchestrator'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Remove template-only workflows and replace README
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -e  # Exit on any error
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Determine the default branch and ensure we are on it before applying changes
+          BRANCH="${DEFAULT_BRANCH}"
+          if [ -z "$BRANCH" ]; then
+            BRANCH="$(git remote show origin | sed -n '/HEAD branch/s/.*: //p' | tr -d ' ')"
+          fi
+          BRANCH="${BRANCH:-main}"
+          git checkout "$BRANCH" || git checkout -B "$BRANCH"
+
+          # Remove the injector (handle both spellings; only needed in orchestrator)
+          git rm -f .github/workflows/injector.yml || true
+          git rm -f .github/workflows/inyector.yml || true
+
+          # Remove this cleanup workflow (one-time use)
+          git rm -f .github/workflows/template-cleanup.yml
+
+          # Replace README.md with a clean starter template
+          cat > README.md << EOF
+          # ${REPO_NAME}
+
+          ## 📝 Description
+
+          <!-- TODO: Add a description of your project here -->
+
+          This project was created from the [sdd-orchestrator](https://github.com/noeScalerandi/sdd-orchestrator) template.
+
+          ## 🚀 Getting Started
+
+          ### Prerequisites
+
+          <!-- TODO: List any prerequisites here -->
+
+          ### Installation
+
+          <!-- TODO: Add installation instructions -->
+
+          ## 📖 Usage
+
+          <!-- TODO: Add usage examples -->
+
+          ## 🤝 Contributing
+
+          Contributions are welcome! Please feel free to submit a Pull Request.
+
+          ## 📄 License
+
+          <!-- TODO: Add your license information -->
+          EOF
+
+          git add README.md
+          git commit -m "chore: remove template-only workflows and initialize README"
+          git push

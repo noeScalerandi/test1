@@ -1,0 +1,50 @@
+name: "Agent - Universal Best Practices"
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# Add these permissions
+permissions:
+  contents: read
+  statuses: write
+  pull-requests: write
+
+jobs:
+  quality-audit:
+    name: "Audit Project Health"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: "1. Checkout Code"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "2. Check for Secrets (Security)"
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "3. Universal Linting (Super-Linter)"
+        uses: github/super-linter/slim@v5
+        env:
+          VALIDATE_ALL_CODEBASE: false
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "4. Verify Documentation & Structure"
+        run: |
+          echo "Checking for essential files..."
+          MISSING_FILES=()
+          [ ! -f "README.md" ] && MISSING_FILES+=("README.md")
+          [ ! -f "LICENSE" ] && MISSING_FILES+=("LICENSE")
+          [ ! -f ".gitignore" ] && MISSING_FILES+=(".gitignore")
+          
+          if [ ${#MISSING_FILES[@]} -gt 0 ]; then
+            echo "::warning title=Missing Best Practice Files::Faltan los siguientes archivos: ${MISSING_FILES[*]}"
+          else
+            echo "All essential files are present. Good job!"
+          fi

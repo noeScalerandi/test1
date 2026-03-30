@@ -1,0 +1,117 @@
+# ============================================================================
+# AUTOMATIC PULL REQUEST LABELING
+# ============================================================================
+# This workflow automatically classifies PRs based on the modified files,
+# making it easier to navigate and filter the backlog.
+#
+# Labels applied:
+#   - documentation → changes in *.md and docs/**
+#   - tests         → changes in test files
+#   - ci            → changes in .github/**
+#   - dependencies  → changes in dependency files
+#   - config        → changes in config files at root level
+# ============================================================================
+
+name: "Auto Label"
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: "Label PR automatically"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Label based on modified files"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            const filenames = files.map(f => f.filename);
+            const labelsToAdd = new Set();
+
+            // Labeling rules
+            const rules = [
+              {
+                label: 'documentation',
+                patterns: [/\.md$/i, /^docs\//],
+              },
+              {
+                label: 'tests',
+                patterns: [/\/tests?\//, /\.test\.[^/]+$/, /\.spec\.[^/]+$/],
+              },
+              {
+                label: 'ci',
+                patterns: [/^\.github\//],
+              },
+              {
+                label: 'dependencies',
+                patterns: [
+                  /^package\.json$/, /^requirements\.txt$/, /^go\.mod$/,
+                  /^Cargo\.toml$/, /\.lock$/,
+                ],
+              },
+              {
+                label: 'config',
+                // Config files at root level (excluding .github/ which is covered by 'ci')
+                patterns: [
+                  /^[^/]+\.(yml|yaml|json|toml)$/,
+                ],
+                exclude: [/^\.github\//],
+              },
+            ];
+
+            for (const rule of rules) {
+              const matches = filenames.filter(f =>
+                rule.patterns.some(p => p.test(f)) &&
+                !(rule.exclude || []).some(p => p.test(f))
+              );
+              if (matches.length > 0) {
+                labelsToAdd.add(rule.label);
+              }
+            }
+
+            if (labelsToAdd.size === 0) return;
+
+            // Ensure labels exist before applying them
+            for (const label of labelsToAdd) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label,
+                });
+              } catch (e) {
+                // Label doesn't exist, create it with default colors
+                const colors = {
+                  documentation: '0075ca',
+                  tests: 'e4e669',
+                  ci: '000000',
+                  dependencies: '0366d6',
+                  config: 'f29513',
+                };
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label,
+                  color: colors[label] || 'ededed',
+                });
+              }
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: [...labelsToAdd],
+            });
